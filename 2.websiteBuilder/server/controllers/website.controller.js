@@ -99,7 +99,6 @@ SPA VISIBILITY RULE (MANDATORY)
 - At least ONE page MUST be visible on initial load
 - Hiding all content is INVALID
 
-
 --------------------------------------------------
 REQUIRED SPA PAGES
 --------------------------------------------------
@@ -151,220 +150,258 @@ ABSOLUTE RULES
 - IF FORMAT IS BROKEN → RESPONSE IS INVALID
 `;
 
-
 export const generateWebsite = async (req, res) => {
-    try {
-        const { prompt } = req.body
-        if (!prompt) {
-            return res.status(400).json({ message: "prompt is required" })
-        }
-        const user = await User.findById(req.user._id)
+  try {
+    const { prompt } = req.body;
 
-        if (!user) {
-            return res.status(400).json({ message: "user not found" })
-        }
-
-        // if (user.credits < 50) {
-        //     return res.status(400).json({ message: "you have not enough credits to generate a webiste" })
-        // }
-
-        const finalPrompt = masterPrompt.replace("USER_PROMPT", prompt)
-        let raw = ""
-        let parsed = null
-        for (let i = 0; i < 2 && !parsed; i++) {
-            raw = await generateResponse(finalPrompt)
-            parsed = await extractJson(raw)
-
-            if (!parsed) {
-                raw = await generateResponse(finalPrompt + "\n\nRETURN ONLY RAW JSON.")
-                parsed = await extractJson(raw)
-            }
-        }
-
-        if (!parsed.code) {
-            console.log("ai returned invalid response", raw)
-            return res.status(400).json({ message: "ai returned invalid response" })
-        }
-
-        const website = await Website.create({
-            user: user._id,
-            title: prompt.slice(0, 60),
-            latestCode: parsed.code,
-            conversation: [
-                {
-                    role: "user",
-                    content: prompt
-                },
-                {
-                    role: "ai",
-                    content: parsed.message
-                }
-            ]
-        })
-
-        // user.credits = user.credits - 50
-        // await user.save()
-
-        return res.status(201).json({
-            websiteId: website._id,
-            remainingCredits: user.credits
-        })
-
-    } catch (error) {
-        return res.status(500).json({ message: `generate website error ${error}` })
+    if (!req.user?._id) {
+      return res.status(401).json({ message: "User not authenticated" });
     }
-}
 
+    if (!prompt || !prompt.trim()) {
+      return res.status(400).json({ message: "Prompt is required" });
+    }
+
+    const user = await User.findById(req.user._id);
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const finalPrompt = masterPrompt.replace("{USER_PROMPT}", prompt.trim());
+
+    let raw = "";
+    let parsed = null;
+
+    for (let i = 0; i < 2 && !parsed; i++) {
+      raw = await generateResponse(finalPrompt);
+      parsed = await extractJson(raw);
+
+      if (!parsed) {
+        raw = await generateResponse(`${finalPrompt}\n\nRETURN ONLY RAW JSON.`);
+        parsed = await extractJson(raw);
+      }
+    }
+
+    if (!parsed?.code) {
+      console.log("AI returned invalid response:", raw);
+      return res.status(400).json({ message: "AI returned invalid response" });
+    }
+
+    const website = await Website.create({
+      user: user._id,
+      title: prompt.trim().slice(0, 60),
+      latestCode: parsed.code,
+      conversation: [
+        {
+          role: "user",
+          content: prompt.trim(),
+        },
+        {
+          role: "ai",
+          content: parsed.message || "Website generated successfully",
+        },
+      ],
+    });
+
+    return res.status(201).json({
+      websiteId: website._id,
+      remainingCredits: user.credits,
+    });
+  } catch (error) {
+    console.log("GENERATE WEBSITE ERROR:", error);
+    return res.status(500).json({
+      message: "Generate website error",
+      error: error.message,
+    });
+  }
+};
 
 export const getWebsiteById = async (req, res) => {
-    try {
-        const website = await Website.findOne({
-            _id: req.params.id,
-            user: req.user._id
-        })
-
-        if (!website) {
-            return res.status(400).json({ message: "website not found" })
-        }
-        return res.status(200).json(website)
-    } catch (error) {
-        return res.status(500).json({ message: `get website by id error ${error}` })
+  try {
+    if (!req.user?._id) {
+      return res.status(401).json({ message: "User not authenticated" });
     }
-}
 
+    const website = await Website.findOne({
+      _id: req.params.id,
+      user: req.user._id,
+    });
+
+    if (!website) {
+      return res.status(404).json({ message: "Website not found" });
+    }
+
+    return res.status(200).json(website);
+  } catch (error) {
+    console.log("GET WEBSITE BY ID ERROR:", error);
+    return res.status(500).json({
+      message: "Get website by id error",
+      error: error.message,
+    });
+  }
+};
 
 export const changes = async (req, res) => {
-    try {
-        const { prompt } = req.body
-        if (!prompt) {
-            return res.status(400).json({ message: "prompt is required" })
-        }
+  try {
+    const { prompt } = req.body;
 
-        const website = await Website.findOne({
-            _id: req.params.id,
-            user: req.user._id
-        })
+    if (!req.user?._id) {
+      return res.status(401).json({ message: "User not authenticated" });
+    }
 
-        if (!website) {
-            return res.status(400).json({ message: "website not found" })
-        }
+    if (!prompt || !prompt.trim()) {
+      return res.status(400).json({ message: "Prompt is required" });
+    }
 
-        const user = await User.findById(req.user._id)
+    const website = await Website.findOne({
+      _id: req.params.id,
+      user: req.user._id,
+    });
 
-        if (!user) {
-            return res.status(400).json({ message: "user not found" })
-        }
+    if (!website) {
+      return res.status(404).json({ message: "Website not found" });
+    }
 
-        // if (user.credits < 25) {
-        //     return res.status(400).json({ message: "you have not enough credits to generate a webiste" })
-        // }
+    const user = await User.findById(req.user._id);
 
-        const updatePrompt = `
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const updatePrompt = `
 UPDATE THIS HTML WEBSITE.
 
 CURRENT CODE:
 ${website.latestCode}
 
 USER REQUEST:
-${prompt}
+${prompt.trim()}
 
 RETURN RAW JSON ONLY:
 {
   "message": "Short confirmation",
   "code": "<UPDATED FULL HTML>"
 }
-`
-        let raw = ""
-        let parsed = null
-        for (let i = 0; i < 2 && !parsed; i++) {
-            raw = await generateResponse(updatePrompt)
-            parsed = await extractJson(raw)
+`;
 
-            if (!parsed) {
-                raw = await generateResponse(updatePrompt + "\n\nRETURN ONLY RAW JSON.")
-                parsed = await extractJson(raw)
-            }
-        }
+    let raw = "";
+    let parsed = null;
 
-        if (!parsed.code) {
-            console.log("ai returned invalid response", raw)
-            return res.status(400).json({ message: "ai returned invalid response" })
-        }
+    for (let i = 0; i < 2 && !parsed; i++) {
+      raw = await generateResponse(updatePrompt);
+      parsed = await extractJson(raw);
 
-        website.conversation.push(
-            { role: "user", content: prompt },
-            { role: "ai", content: parsed.message },
-        )
-
-        website.latestCode = parsed.code
-        await website.save()
-
-        // user.credits = user.credits - 25
-        // await user.save()
-
-        return res.status(200).json({
-            message: parsed.message,
-            code: parsed.code,
-            remainingCredits: user.credits
-        })
-
-    } catch (error) {
-        console.log(error)
-        return res.status(500).json({ message: `update website error ${error}` })
+      if (!parsed) {
+        raw = await generateResponse(`${updatePrompt}\n\nRETURN ONLY RAW JSON.`);
+        parsed = await extractJson(raw);
+      }
     }
-}
 
+    if (!parsed?.code) {
+      console.log("AI returned invalid response:", raw);
+      return res.status(400).json({ message: "AI returned invalid response" });
+    }
+
+    website.conversation.push(
+      { role: "user", content: prompt.trim() },
+      { role: "ai", content: parsed.message || "Website updated successfully" }
+    );
+
+    website.latestCode = parsed.code;
+    await website.save();
+
+    return res.status(200).json({
+      message: parsed.message || "Website updated successfully",
+      code: parsed.code,
+      remainingCredits: user.credits,
+    });
+  } catch (error) {
+    console.log("UPDATE WEBSITE ERROR:", error);
+    return res.status(500).json({
+      message: "Update website error",
+      error: error.message,
+    });
+  }
+};
 
 export const getAll = async (req, res) => {
-    try {
-        const websites = await Website.find({ user: req.user._id })
-        return res.status(200).json(websites)
-    } catch (error) {
-        return res.status(500).json({ message: `get all websites error ${error}` })
-    }
-}
+  try {
+    console.log("REQ USER:", req.user);
 
+    if (!req.user?._id) {
+      return res.status(401).json({
+        message: "User not authenticated",
+      });
+    }
+
+    const websites = await Website.find({
+      user: req.user._id,
+    }).sort({ updatedAt: -1 });
+
+    return res.status(200).json(websites);
+  } catch (error) {
+    console.log("GET ALL ERROR:", error);
+    return res.status(500).json({
+      message: "Get all websites error",
+      error: error.message,
+    });
+  }
+};
 
 export const deploy = async (req, res) => {
-    try {
-        const website = await Website.findOne({
-            _id: req.params.id,
-            user: req.user._id
-        })
-
-        if (!website) {
-            return res.status(400).json({ message: "website not found" })
-        }
-
-        if (!website.slug) {
-            website.slug = website.title.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 60) + website._id.toString().slice(-5)
-        }
-
-        website.deployed = true
-        website.deployUrl = `${process.env.FRONTEND_URL}/site/${website.slug}`
-        await website.save()
-
-        return res.status(200).json({
-            url: website.deployUrl
-        })
-
-    } catch (error) {
-        return res.status(500).json({ message: `deploy website error ${error}` })
+  try {
+    if (!req.user?._id) {
+      return res.status(401).json({ message: "User not authenticated" });
     }
-}
 
+    const website = await Website.findOne({
+      _id: req.params.id,
+      user: req.user._id,
+    });
+
+    if (!website) {
+      return res.status(404).json({ message: "Website not found" });
+    }
+
+    if (!website.slug) {
+      website.slug =
+        website.title.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 60) +
+        website._id.toString().slice(-5);
+    }
+
+    website.deployed = true;
+    website.deployUrl = `${process.env.FRONTEND_URL}/site/${website.slug}`;
+    await website.save();
+
+    return res.status(200).json({
+      url: website.deployUrl,
+    });
+  } catch (error) {
+    console.log("DEPLOY WEBSITE ERROR:", error);
+    return res.status(500).json({
+      message: "Deploy website error",
+      error: error.message,
+    });
+  }
+};
 
 export const getBySlug = async (req, res) => {
-    try {
-        const website = await Website.findOne({
-            slug: req.params.slug
-        })
+  try {
+    const website = await Website.findOne({
+      slug: req.params.slug,
+    });
 
-        if (!website) {
-            return res.status(400).json({ message: "website not found" })
-        }
-        return res.status(200).json(website)
-    } catch (error) {
-        return res.status(500).json({ message: `get by slug website error ${error}` })
+    if (!website) {
+      return res.status(404).json({ message: "Website not found" });
     }
-}
+
+    return res.status(200).json(website);
+  } catch (error) {
+    console.log("GET BY SLUG ERROR:", error);
+    return res.status(500).json({
+      message: "Get by slug website error",
+      error: error.message,
+    });
+  }
+};

@@ -1,5 +1,6 @@
 import React from 'react'
-import { AnimatePresence} from "motion/react"
+import { motion } from "framer-motion";
+import { AnimatePresence } from "framer-motion";
 import { signInWithPopup } from 'firebase/auth'
 import { auth, provider } from '../firebase'
 import axios from "axios"

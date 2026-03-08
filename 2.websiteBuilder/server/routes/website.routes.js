@@ -1,16 +1,23 @@
-import express from "express"
+import express from "express";
+import { authMiddleware as isAuth } from "../middlewares/isAuth.js";
+import {
+  changes,
+  deploy,
+  generateWebsite,
+  getAll,
+  getBySlug,
+  getWebsiteById,
+} from "../controllers/website.controller.js";
 
-import { authMiddleware as isAuth } from "../middlewares/isAuth.js"
-import { changes, deploy, generateWebsite, getAll, getBySlug, getWebsiteById } from "../controllers/website.controller.js"
+const websiteRouter = express.Router();
 
+websiteRouter.post("/generate", isAuth, generateWebsite);
+websiteRouter.post("/update/:id", isAuth, changes);
+websiteRouter.get("/get-by-id/:id", isAuth, getWebsiteById);
+websiteRouter.get("/get-all", isAuth, getAll);
+websiteRouter.get("/deploy/:id", isAuth, deploy);
 
-const websiteRouter=express.Router()
+// Public route for deployed websites
+websiteRouter.get("/get-by-slug/:slug", getBySlug);
 
-websiteRouter.post("/generate",isAuth,generateWebsite)
-websiteRouter.post("/update/:id",isAuth,changes)
-websiteRouter.get("/get-by-id/:id",isAuth,getWebsiteById)
-websiteRouter.get("/get-all",isAuth,getAll)
-websiteRouter.get("/deploy/:id",isAuth,deploy)
-websiteRouter.get("/get-by-slug/:slug",isAuth,getBySlug)
-
-export default websiteRouter
+export default websiteRouter;
