@@ -1,7 +1,7 @@
 import { ArrowLeft } from "lucide-react";
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { motion } from "motion/react";
+import { motion } from "framer-motion";
 import axios from "axios";
 import { serverUrl } from "../App";
 
